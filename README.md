@@ -1,5 +1,4 @@
-
-### Adds dynamic exploration to the game be providing the player with a, much longer range, "ping" system
+### Adds dynamic exploration to Star Citizen be providing the player with a, much longer range, "ping" system
 
 *To run the script you need to install Python. To do so please visit: https://www.python.org/downloads/windows/*
 
