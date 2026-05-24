@@ -1,4 +1,4 @@
-﻿if not A_IsAdmin
+if not A_IsAdmin
 {
 Run *RunAs "%A_ScriptFullPath%"
 ExitApp
@@ -7,11 +7,10 @@ ExitApp
 
 
 SetKeyDelay, 25
-#IfWinActive, Star Citizen                                              ;runs script only if Star Citien is running
-LWin::                                                                  ;if right alt is pressed
-prev:=WinActive("A")												  	;grab focus of currently selected window
-WinActivate, Star Citizen												;in any case focus starcitizen
-WinWait, Star Citizen													;waits until window is focussed
+SetTimer, PeriodicF12Toggle, 600000
+
+#IfWinActive, Star Citizen
+^/::
 Sleep, 100
 Send, {F12}
 Sleep, 200
@@ -22,3 +21,31 @@ Sleep, 100
 Send, {Enter}
 Sleep, 200
 Send, {F12}
+return
+
+PeriodicF12Toggle:
+if !WinExist("Star Citizen")
+    return
+
+wasStarCitizenActive := WinActive("Star Citizen")
+rememberedWindow := ""
+
+if (!wasStarCitizenActive)
+{
+    rememberedWindow := WinExist("A")
+    WinActivate, Star Citizen
+    WinWaitActive, Star Citizen,, 5
+    if (ErrorLevel)
+        return
+}
+
+Send, {F12}
+Sleep, 200
+Send, {F12}
+
+if (!wasStarCitizenActive && rememberedWindow)
+{
+    if WinExist("ahk_id " rememberedWindow)
+        WinActivate, ahk_id %rememberedWindow%
+}
+return
