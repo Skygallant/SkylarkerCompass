@@ -7,7 +7,6 @@ ExitApp
 
 
 SetKeyDelay, 25
-SetTimer, PeriodicF12Toggle, 600000
 
 #IfWinActive, Star Citizen
 ^/::
@@ -22,6 +21,9 @@ Send, {Enter}
 Sleep, 200
 Send, {F12}
 return
+
+#If false
+SetTimer, PeriodicF12Toggle, 600000
 
 PeriodicF12Toggle:
 if !WinExist("Star Citizen")
@@ -49,3 +51,4 @@ if (!wasStarCitizenActive && rememberedWindow)
         WinActivate, ahk_id %rememberedWindow%
 }
 return
+#If

@@ -1,4 +1,4 @@
-# V4.0
+# V4.1
 
 #################################################################
 ##########################CONFIGURATION##########################
@@ -85,15 +85,6 @@ def nearest_entry(atlas: Iterable, x: float, y: float, z: float, allowed_types=N
     )
     return nearest
 
-def nearest_space_poi(atlas: Iterable, x: float, y: float, z: float):
-    priority = [e for e in atlas if e.Type not in PLANETARY_TYPES and e.Type != "AsteroidBelt"]
-    if priority:
-        return nearest_entry(priority, x, y, z)
-    fallback = [e for e in atlas if e.Type not in PLANETARY_TYPES]
-    if fallback:
-        return nearest_entry(fallback, x, y, z)
-    return nearest_entry(atlas, x, y, z)
-
 def nearest_pois(database, lat, lon, r, planet, n=SCAN_ENTRIES, max_d=SCAN_DISTANCE):
     filtered = [
         (e, haversine(lat, lon, e.Latitude, e.Longitude360, r))
@@ -126,16 +117,15 @@ def ensure_waypoint_template(source_file="waypoints.csv", template_file="waypoin
     if os.path.exists(source_file) or os.path.exists(template_file):
         return
     with open(template_file, "w", encoding="utf-8", newline="") as f:
-        f.write("terrestial,showlocation,nearest,system,name\n")
+        f.write("showlocation,nearest,system,name\n")
 
 def append_waypoint(entry: Dict[str, str], file_path="waypoints.csv"):
     file_exists = os.path.exists(file_path)
     with open(file_path, "a", encoding="utf-8", newline="") as f:
         writer = csv.writer(f)
         if not file_exists:
-            writer.writerow(["terrestial", "showlocation", "nearest", "system", "name"])
+            writer.writerow(["showlocation", "nearest", "system", "name"])
         writer.writerow([
-            entry["terrestial"],
             entry["showlocation"],
             entry["nearest"],
             entry["system"],
@@ -155,15 +145,6 @@ def matching_waypoints(nearest: str, system: str, file_path="waypoints.csv"):
                 results.append(row)
     return results
 
-def parse_xyz(showlocation: str):
-    parts = [p.strip() for p in showlocation.split(",")]
-    if len(parts) != 3:
-        return None
-    try:
-        return tuple(float(p) for p in parts)
-    except ValueError:
-        return None
-
 def parse_latlon(showlocation: str):
     parts = [p.strip() for p in showlocation.split(",")]
     if len(parts) != 2:
@@ -179,13 +160,6 @@ def waypoint_name(row: Dict[str, str]):
         or "(unnamed)"
     )
 
-def camera_direction_xyz(x: float, y: float, z: float, wx: float, wy: float, wz: float):
-    dx = wx - x
-    dy = wy - y
-    if dx == 0 and dy == 0:
-        return None
-    return (math.degrees(math.atan2(dy, dx)) + 360.0) % 360.0
-
 atlas = [
     AtlasEntry(
         System=entry["System"],
@@ -198,7 +172,7 @@ atlas = [
         RotationSpeedX=entry["RotationSpeedX"],
         RotationAdjustmentX=entry["RotationAdjustmentX"]
     )
-    for entry in open_book("atlas.json", "https://starmap.space/api/v3/oc")
+    for entry in open_book("atlas.json", "https://starmap.space/api/v4/oc")
 ]
 pois = [
     PoiEntry(
@@ -213,7 +187,7 @@ pois = [
 ensure_waypoint_template()
 os.system("title Skylarker Compass")
 os.system('cls')
-print("\nRun /showlocation while on a celestial surface to begin scanning the area around you;\nI'm watching your clipboard… (Ctrl+C to quit)\n")
+print("\nRun /showlocation while on a planetary or moon surface and cut '/save' text to save that location;\nI'm watching your clipboard… (Ctrl+C to quit)\n")
 last_snapshot = None
 try:
     while True:
@@ -222,11 +196,10 @@ try:
             last_text = text
             os.system('cls')
             if last_snapshot is None:
-                print("No /showlocation data yet. Copy a /showlocation result first.")
+                print("No planetary /showlocation data yet. Copy a planetary or moon surface /showlocation result first.")
             else:
                 append_waypoint(last_snapshot)
                 print("Saved waypoint to waypoints.csv:")
-                print(f"  terrestial   : {last_snapshot['terrestial']}")
                 print(f"  showlocation : {last_snapshot['showlocation']}")
                 print(f"  nearest      : {last_snapshot['nearest']}")
                 print(f"  system       : {last_snapshot['system']}")
@@ -237,7 +210,14 @@ try:
             last_text = text
             x, y, z = match.groups()
             x, y, z = float(x), float(y), float(z)
-            Planet = nearest_entry(atlas, x, y, z, allowed_types=PLANETARY_TYPES)
+            surface_bodies = [
+                e for e in atlas
+                if e.Type in PLANETARY_TYPES
+            ]
+            if surface_bodies:
+                Planet = nearest_entry(surface_bodies, x, y, z)
+            else:
+                Planet = nearest_entry(atlas, x, y, z, allowed_types=PLANETARY_TYPES)
             PlanetName = Planet.ObjectContainer
             PlanetX = Planet.XCoord
             PlanetY = Planet.YCoord
@@ -251,9 +231,6 @@ try:
             if on_surface:
                 scale = PlanetR / r
                 sx, sy, sz = ox * scale, oy * scale, oz * scale
-                surface_x = PlanetX + sx
-                surface_y = PlanetY + sy
-                surface_z = PlanetZ + sz
                 lat = math.degrees(math.atan2(sz, math.sqrt(sx*sx + sy*sy)))
                 lat_display = -lat
                 lon360 = (math.degrees(math.atan2(sy, sx)) + 360.0) % 360.0
@@ -270,7 +247,6 @@ try:
                 print(f"      Latitude  : {lat_display:+.2f}")
                 print(f"      Longitude : {lon180:+.2f}")
                 last_snapshot = {
-                    "terrestial": "planetary",
                     "showlocation": f"{lat_display:+.6f},{lon180:+.6f}",
                     "nearest": PlanetName,
                     "system": Planet.System,
@@ -301,40 +277,9 @@ try:
                 if not printed_any:
                     print(f"      ...nothing here")
             else:
+                last_snapshot = None
                 os.system('cls')
-                space_poi = nearest_space_poi(atlas, x, y, z)
-                print("||| Scanning Space... |||")
-                print("    Your position is:")
-                print(f"      X : {x:,.3f}")
-                print(f"      Y : {y:,.3f}")
-                print(f"      Z : {z:,.3f}")
-                print("    Nearest space POI...")
-                print(f"      {space_poi.ObjectContainer}")
-                matches = matching_waypoints(space_poi.ObjectContainer, space_poi.System)
-                print("    Matching waypoints...")
-                if matches:
-                    for row in matches:
-                        label = waypoint_name(row)
-                        waypoint_xyz = parse_xyz((row.get("showlocation") or "").strip())
-                        if waypoint_xyz is None:
-                            distance_text = "n/a"
-                            camera_direction_text = "n/a"
-                        else:
-                            wx, wy, wz = waypoint_xyz
-                            distance_text = f"{math.sqrt((x - wx)**2 + (y - wy)**2 + (z - wz)**2):,.0f}m"
-                            camera_direction = camera_direction_xyz(x, y, z, wx, wy, wz)
-                            camera_direction_text = "n/a" if camera_direction is None else f"{camera_direction:.1f}°"
-                        print(
-                            f"      {label:<32} {distance_text:>12}  cam {camera_direction_text:>7}"
-                        )
-                else:
-                    print("      ...none")
-                last_snapshot = {
-                    "terrestial": "outer space",
-                    "showlocation": f"{x:.6f},{y:.6f},{z:.6f}",
-                    "nearest": space_poi.ObjectContainer,
-                    "system": space_poi.System,
-                }
+                print("||| Nothing here... |||")
         time.sleep(0.25)
 except KeyboardInterrupt:
     print("\nBye!")
